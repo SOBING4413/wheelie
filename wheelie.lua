@@ -19,6 +19,7 @@ local originalCameraType = nil
 local noclipConnection = nil
 local healConnection = nil
 local freecamRunning = false
+local sendNotification
 
 -- ==================== THEME SYSTEM ====================
 local themes = {
@@ -445,7 +446,7 @@ TabBar.Parent = MainFrame
 
 local WheelieTabBtn = Instance.new("TextButton")
 WheelieTabBtn.Name = "WheelieTab"
-WheelieTabBtn.Size = UDim2.new(0.333, -4, 1, 0)
+WheelieTabBtn.Size = UDim2.new(0.25, -4, 1, 0)
 WheelieTabBtn.Position = UDim2.new(0, 0, 0, 0)
 WheelieTabBtn.BackgroundColor3 = currentTheme.tabActive
 WheelieTabBtn.Text = "Wheelie"
@@ -458,8 +459,8 @@ Instance.new("UICorner", WheelieTabBtn).CornerRadius = UDim.new(0, 10)
 
 local ExtraTabBtn = Instance.new("TextButton")
 ExtraTabBtn.Name = "ExtraTab"
-ExtraTabBtn.Size = UDim2.new(0.333, -4, 1, 0)
-ExtraTabBtn.Position = UDim2.new(0.333, 2, 0, 0)
+ExtraTabBtn.Size = UDim2.new(0.25, -4, 1, 0)
+ExtraTabBtn.Position = UDim2.new(0.25, 2, 0, 0)
 ExtraTabBtn.BackgroundColor3 = currentTheme.tabInactive
 ExtraTabBtn.Text = "Extra"
 ExtraTabBtn.TextColor3 = currentTheme.textDim
@@ -471,8 +472,8 @@ Instance.new("UICorner", ExtraTabBtn).CornerRadius = UDim.new(0, 10)
 
 local SpeedTabBtn = Instance.new("TextButton")
 SpeedTabBtn.Name = "SpeedTab"
-SpeedTabBtn.Size = UDim2.new(0.333, -4, 1, 0)
-SpeedTabBtn.Position = UDim2.new(0.666, 4, 0, 0)
+SpeedTabBtn.Size = UDim2.new(0.25, -4, 1, 0)
+SpeedTabBtn.Position = UDim2.new(0.5, 4, 0, 0)
 SpeedTabBtn.BackgroundColor3 = currentTheme.tabInactive
 SpeedTabBtn.Text = "Speed"
 SpeedTabBtn.TextColor3 = currentTheme.textDim
@@ -481,6 +482,19 @@ SpeedTabBtn.Font = Enum.Font.GothamBold
 SpeedTabBtn.BorderSizePixel = 0
 SpeedTabBtn.Parent = TabBar
 Instance.new("UICorner", SpeedTabBtn).CornerRadius = UDim.new(0, 10)
+
+local TeleportTabBtn = Instance.new("TextButton")
+TeleportTabBtn.Name = "TeleportTab"
+TeleportTabBtn.Size = UDim2.new(0.25, -4, 1, 0)
+TeleportTabBtn.Position = UDim2.new(0.75, 6, 0, 0)
+TeleportTabBtn.BackgroundColor3 = currentTheme.tabInactive
+TeleportTabBtn.Text = "Teleport"
+TeleportTabBtn.TextColor3 = currentTheme.textDim
+TeleportTabBtn.TextSize = 12
+TeleportTabBtn.Font = Enum.Font.GothamBold
+TeleportTabBtn.BorderSizePixel = 0
+TeleportTabBtn.Parent = TabBar
+Instance.new("UICorner", TeleportTabBtn).CornerRadius = UDim.new(0, 10)
 
 -- ==================== WHEELIE CONTENT ====================
 local WheelieContent = Instance.new("Frame")
@@ -1142,6 +1156,333 @@ ResetBtn.LayoutOrder = 10
 ResetBtn.Parent = SpeedScroll
 Instance.new("UICorner", ResetBtn).CornerRadius = UDim.new(0, 8)
 
+-- ==================== TELEPORT CONTENT ====================
+local TeleportContent = Instance.new("Frame")
+TeleportContent.Name = "TeleportContent"
+TeleportContent.Size = UDim2.new(1, -20, 1, -94)
+TeleportContent.Position = UDim2.new(0, 10, 0, 88)
+TeleportContent.BackgroundTransparency = 1
+TeleportContent.Visible = false
+TeleportContent.Parent = MainFrame
+
+local TeleportPanel = Instance.new("Frame")
+TeleportPanel.Size = UDim2.new(1, 0, 1, 0)
+TeleportPanel.BackgroundColor3 = currentTheme.panel
+TeleportPanel.BackgroundTransparency = 0.2
+TeleportPanel.BorderSizePixel = 0
+TeleportPanel.Parent = TeleportContent
+Instance.new("UICorner", TeleportPanel).CornerRadius = UDim.new(0, 12)
+local TeleportPanelStroke = Instance.new("UIStroke", TeleportPanel)
+TeleportPanelStroke.Color = currentTheme.border
+TeleportPanelStroke.Thickness = 1
+
+local TeleportTitle = Instance.new("TextLabel")
+TeleportTitle.Size = UDim2.new(1, -10, 0, 25)
+TeleportTitle.Position = UDim2.new(0, 12, 0, 8)
+TeleportTitle.BackgroundTransparency = 1
+TeleportTitle.Text = "Teleport ke Pemain"
+TeleportTitle.TextColor3 = currentTheme.accent
+TeleportTitle.TextSize = 14
+TeleportTitle.Font = Enum.Font.GothamBold
+TeleportTitle.TextXAlignment = Enum.TextXAlignment.Left
+TeleportTitle.Parent = TeleportPanel
+
+local TeleportSearchBox = Instance.new("TextBox")
+TeleportSearchBox.Size = UDim2.new(1, -120, 0, 28)
+TeleportSearchBox.Position = UDim2.new(0, 10, 0, 36)
+TeleportSearchBox.BackgroundColor3 = currentTheme.card
+TeleportSearchBox.BackgroundTransparency = 0.25
+TeleportSearchBox.PlaceholderText = "Cari pemain..."
+TeleportSearchBox.PlaceholderColor3 = currentTheme.textDim
+TeleportSearchBox.Text = ""
+TeleportSearchBox.ClearTextOnFocus = false
+TeleportSearchBox.TextColor3 = currentTheme.text
+TeleportSearchBox.TextSize = 12
+TeleportSearchBox.Font = Enum.Font.GothamSemibold
+TeleportSearchBox.BorderSizePixel = 0
+TeleportSearchBox.Parent = TeleportPanel
+Instance.new("UICorner", TeleportSearchBox).CornerRadius = UDim.new(0, 8)
+
+local TeleportRefreshBtn = Instance.new("TextButton")
+TeleportRefreshBtn.Size = UDim2.new(0, 96, 0, 28)
+TeleportRefreshBtn.Position = UDim2.new(1, -106, 0, 36)
+TeleportRefreshBtn.BackgroundColor3 = currentTheme.tabInactive
+TeleportRefreshBtn.BackgroundTransparency = 0.15
+TeleportRefreshBtn.Text = "Refresh"
+TeleportRefreshBtn.TextColor3 = currentTheme.text
+TeleportRefreshBtn.TextSize = 11
+TeleportRefreshBtn.Font = Enum.Font.GothamBold
+TeleportRefreshBtn.BorderSizePixel = 0
+TeleportRefreshBtn.Parent = TeleportPanel
+Instance.new("UICorner", TeleportRefreshBtn).CornerRadius = UDim.new(0, 8)
+
+local TeleportHeader = Instance.new("Frame")
+TeleportHeader.Size = UDim2.new(1, -20, 0, 24)
+TeleportHeader.Position = UDim2.new(0, 10, 0, 72)
+TeleportHeader.BackgroundColor3 = currentTheme.card
+TeleportHeader.BackgroundTransparency = 0.2
+TeleportHeader.BorderSizePixel = 0
+TeleportHeader.Parent = TeleportPanel
+Instance.new("UICorner", TeleportHeader).CornerRadius = UDim.new(0, 8)
+
+local NameHeader = Instance.new("TextLabel")
+NameHeader.Size = UDim2.new(0.52, 0, 1, 0)
+NameHeader.Position = UDim2.new(0, 10, 0, 0)
+NameHeader.BackgroundTransparency = 1
+NameHeader.Text = "Nama"
+NameHeader.TextColor3 = currentTheme.textDim
+NameHeader.TextSize = 10
+NameHeader.Font = Enum.Font.GothamBold
+NameHeader.TextXAlignment = Enum.TextXAlignment.Left
+NameHeader.Parent = TeleportHeader
+
+local StatusHeader = Instance.new("TextLabel")
+StatusHeader.Size = UDim2.new(0.2, 0, 1, 0)
+StatusHeader.Position = UDim2.new(0.52, 0, 0, 0)
+StatusHeader.BackgroundTransparency = 1
+StatusHeader.Text = "Status"
+StatusHeader.TextColor3 = currentTheme.textDim
+StatusHeader.TextSize = 10
+StatusHeader.Font = Enum.Font.GothamBold
+StatusHeader.TextXAlignment = Enum.TextXAlignment.Left
+StatusHeader.Parent = TeleportHeader
+
+local ActionHeader = Instance.new("TextLabel")
+ActionHeader.Size = UDim2.new(0.22, 0, 1, 0)
+ActionHeader.Position = UDim2.new(0.74, 0, 0, 0)
+ActionHeader.BackgroundTransparency = 1
+ActionHeader.Text = "Aksi"
+ActionHeader.TextColor3 = currentTheme.textDim
+ActionHeader.TextSize = 10
+ActionHeader.Font = Enum.Font.GothamBold
+ActionHeader.TextXAlignment = Enum.TextXAlignment.Left
+ActionHeader.Parent = TeleportHeader
+
+local TeleportScroll = Instance.new("ScrollingFrame")
+TeleportScroll.Size = UDim2.new(1, -20, 1, -150)
+TeleportScroll.Position = UDim2.new(0, 10, 0, 100)
+TeleportScroll.BackgroundTransparency = 1
+TeleportScroll.BorderSizePixel = 0
+TeleportScroll.ScrollBarThickness = 4
+TeleportScroll.ScrollBarImageColor3 = currentTheme.accent
+TeleportScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+TeleportScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+TeleportScroll.Parent = TeleportPanel
+
+local TeleportListLayout = Instance.new("UIListLayout", TeleportScroll)
+TeleportListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+TeleportListLayout.Padding = UDim.new(0, 6)
+
+local TeleportFooter = Instance.new("TextLabel")
+TeleportFooter.Size = UDim2.new(1, -20, 0, 22)
+TeleportFooter.Position = UDim2.new(0, 10, 1, -24)
+TeleportFooter.BackgroundTransparency = 1
+TeleportFooter.Text = "0 pemain | Favorite: -"
+TeleportFooter.TextColor3 = currentTheme.textDim
+TeleportFooter.TextSize = 11
+TeleportFooter.Font = Enum.Font.Gotham
+TeleportFooter.TextXAlignment = Enum.TextXAlignment.Left
+TeleportFooter.Parent = TeleportPanel
+
+local TeleportHint = Instance.new("TextLabel")
+TeleportHint.Size = UDim2.new(1, -20, 0, 16)
+TeleportHint.Position = UDim2.new(0, 10, 0, 24)
+TeleportHint.BackgroundTransparency = 1
+TeleportHint.Text = "Hanya pemain online ditampilkan • Klik Refresh untuk sinkronisasi ulang"
+TeleportHint.TextColor3 = currentTheme.textDim
+TeleportHint.TextSize = 10
+TeleportHint.Font = Enum.Font.Gotham
+TeleportHint.TextXAlignment = Enum.TextXAlignment.Left
+TeleportHint.Parent = TeleportPanel
+
+local teleportRows = {}
+local teleportFavorites = {}
+local teleportLastTarget = nil
+
+local function teleportToPlayer(targetPlayer)
+    if not targetPlayer or targetPlayer == player then
+        sendNotification("Teleport Gagal", "Target tidak valid.", "error", 3)
+        return
+    end
+
+    local localCharacter = player.Character
+    local localRoot = localCharacter and localCharacter:FindFirstChild("HumanoidRootPart")
+    local targetCharacter = targetPlayer.Character
+    local targetRoot = targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart")
+    if not localRoot or not targetRoot then
+        sendNotification("Teleport Gagal", "Posisi pemain belum tersedia.", "warning", 3)
+        return
+    end
+
+    if (localRoot.Position - targetRoot.Position).Magnitude < 2 then
+        sendNotification("Teleport", "Kamu sudah dekat dengan " .. targetPlayer.Name, "info", 2)
+        return
+    end
+
+    local destination = targetRoot.Position + Vector3.new(0, 4, 0)
+    pcall(function()
+        localRoot.CFrame = CFrame.new(destination, targetRoot.Position)
+    end)
+    teleportLastTarget = targetPlayer
+    sendNotification("Teleport Berhasil", "Kamu teleport ke " .. targetPlayer.Name, "success", 3)
+end
+
+local function updateTeleportList(forceRebuild)
+    local query = string.lower(string.gsub(TeleportSearchBox.Text or "", "^%s*(.-)%s*$", "%1"))
+    local players = {}
+    for _, plr in ipairs(Players:GetPlayers()) do
+        local isOnlineReady = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
+        if isOnlineReady then
+            table.insert(players, plr)
+        end
+    end
+    table.sort(players, function(a, b)
+        return string.lower(a.Name) < string.lower(b.Name)
+    end)
+
+    local visibleCount = 0
+    local favoriteName = "-"
+    for _, plr in ipairs(players) do
+        if teleportFavorites[plr.UserId] then
+            favoriteName = plr.Name
+            break
+        end
+    end
+
+    if forceRebuild then
+        for userId, row in pairs(teleportRows) do
+            row:Destroy()
+            teleportRows[userId] = nil
+        end
+    else
+        for _, row in pairs(teleportRows) do
+            row.Visible = false
+        end
+    end
+
+    for _, plr in ipairs(players) do
+        local row = teleportRows[plr.UserId]
+        if not row then
+            local createdUserId = plr.UserId
+            row = Instance.new("Frame")
+            row.Size = UDim2.new(1, 0, 0, 34)
+            row.BackgroundColor3 = currentTheme.card
+            row.BackgroundTransparency = 0.25
+            row.BorderSizePixel = 0
+            row.Parent = TeleportScroll
+            Instance.new("UICorner", row).CornerRadius = UDim.new(0, 8)
+
+            local playerLabel = Instance.new("TextLabel")
+            playerLabel.Name = "PlayerLabel"
+            playerLabel.Size = UDim2.new(0.52, -8, 1, 0)
+            playerLabel.Position = UDim2.new(0, 10, 0, 0)
+            playerLabel.BackgroundTransparency = 1
+            playerLabel.TextColor3 = currentTheme.text
+            playerLabel.TextSize = 11
+            playerLabel.Font = Enum.Font.GothamSemibold
+            playerLabel.TextXAlignment = Enum.TextXAlignment.Left
+            playerLabel.Parent = row
+
+            local statusLabel = Instance.new("TextLabel")
+            statusLabel.Name = "StatusLabel"
+            statusLabel.Size = UDim2.new(0.2, 0, 1, 0)
+            statusLabel.Position = UDim2.new(0.52, 0, 0, 0)
+            statusLabel.BackgroundTransparency = 1
+            statusLabel.TextSize = 10
+            statusLabel.Font = Enum.Font.GothamBold
+            statusLabel.TextXAlignment = Enum.TextXAlignment.Left
+            statusLabel.Parent = row
+
+            local favBtn = Instance.new("TextButton")
+            favBtn.Name = "FavBtn"
+            favBtn.Size = UDim2.new(0, 26, 0, 24)
+            favBtn.Position = UDim2.new(0.74, 0, 0.5, -12)
+            favBtn.BackgroundColor3 = currentTheme.tabInactive
+            favBtn.TextSize = 10
+            favBtn.Font = Enum.Font.GothamBold
+            favBtn.BorderSizePixel = 0
+            favBtn.Parent = row
+            Instance.new("UICorner", favBtn).CornerRadius = UDim.new(0, 6)
+
+            local tpBtn = Instance.new("TextButton")
+            tpBtn.Name = "TeleportBtn"
+            tpBtn.Size = UDim2.new(0, 72, 0, 24)
+            tpBtn.Position = UDim2.new(1, -76, 0.5, -12)
+            tpBtn.BackgroundColor3 = currentTheme.accent
+            tpBtn.Text = "Teleport"
+            tpBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            tpBtn.TextSize = 10
+            tpBtn.Font = Enum.Font.GothamBold
+            tpBtn.BorderSizePixel = 0
+            tpBtn.Parent = row
+            Instance.new("UICorner", tpBtn).CornerRadius = UDim.new(0, 6)
+
+            favBtn.MouseButton1Click:Connect(function()
+                local targetPlayer = Players:GetPlayerByUserId(createdUserId)
+                if not targetPlayer then return end
+                teleportFavorites[createdUserId] = not teleportFavorites[createdUserId]
+                if teleportFavorites[createdUserId] then
+                    sendNotification("Favorite", targetPlayer.Name .. " ditambahkan ke favorite.", "success", 2)
+                else
+                    sendNotification("Favorite", targetPlayer.Name .. " dihapus dari favorite.", "warning", 2)
+                end
+                updateTeleportList()
+            end)
+
+            tpBtn.MouseButton1Click:Connect(function()
+                local targetPlayer = Players:GetPlayerByUserId(createdUserId)
+                teleportToPlayer(targetPlayer)
+            end)
+
+            teleportRows[plr.UserId] = row
+        end
+
+        local rowMatches = query == "" or string.find(string.lower(plr.Name), query, 1, true) ~= nil
+        if rowMatches then
+            visibleCount = visibleCount + 1
+            row.LayoutOrder = visibleCount
+            row.Visible = true
+            row.PlayerLabel.Text = plr.DisplayName ~= plr.Name and (plr.DisplayName .. " (@" .. plr.Name .. ")") or plr.Name
+
+            row.StatusLabel.Text = "Online"
+            row.StatusLabel.TextColor3 = currentTheme.success
+
+            row.FavBtn.Text = teleportFavorites[plr.UserId] and "★" or "☆"
+            row.FavBtn.TextColor3 = teleportFavorites[plr.UserId] and currentTheme.warning or currentTheme.textDim
+            row.FavBtn.BackgroundColor3 = currentTheme.tabInactive
+
+            row.TeleportBtn.BackgroundColor3 = currentTheme.accent
+            row.TeleportBtn.Text = plr == player and "Kamu" or "Teleport"
+            row.TeleportBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            row.TeleportBtn.AutoButtonColor = plr ~= player
+            row.TeleportBtn.Active = plr ~= player
+        end
+    end
+
+    TeleportFooter.Text = string.format("%d pemain online | Favorite: %s", visibleCount, favoriteName)
+end
+
+TeleportSearchBox:GetPropertyChangedSignal("Text"):Connect(updateTeleportList)
+TeleportRefreshBtn.MouseButton1Click:Connect(function()
+    updateTeleportList(true)
+    sendNotification("Player List", "Daftar pemain berhasil di-refresh.", "success", 2)
+end)
+Players.PlayerAdded:Connect(updateTeleportList)
+Players.PlayerRemoving:Connect(function(removingPlayer)
+    local row = teleportRows[removingPlayer.UserId]
+    if row then
+        row:Destroy()
+        teleportRows[removingPlayer.UserId] = nil
+    end
+    teleportFavorites[removingPlayer.UserId] = nil
+    if teleportLastTarget == removingPlayer then
+        teleportLastTarget = nil
+    end
+    updateTeleportList()
+end)
+
+task.delay(0.1, updateTeleportList)
+
 -- ==================== NOTIFIKASI ====================
 local NotifContainer = Instance.new("Frame")
 NotifContainer.Name = "NotifContainer"
@@ -1151,7 +1492,7 @@ NotifContainer.BackgroundTransparency = 1
 NotifContainer.Parent = ScreenGui
 Instance.new("UIListLayout", NotifContainer).Padding = UDim.new(0, 6)
 
-local function sendNotification(title, text, notifType, duration)
+sendNotification = function(title, text, notifType, duration)
     if not notifikasiEnabled then return end
     duration = duration or 4
     local nf = Instance.new("Frame")
@@ -1596,6 +1937,7 @@ local allTabs = {
     {name = "wheelie", btn = WheelieTabBtn, content = WheelieContent},
     {name = "extra", btn = ExtraTabBtn, content = ExtraContent},
     {name = "speed", btn = SpeedTabBtn, content = SpeedContent},
+    {name = "teleport", btn = TeleportTabBtn, content = TeleportContent},
 }
 
 local function switchTab(tabName)
@@ -1617,6 +1959,7 @@ end
 WheelieTabBtn.MouseButton1Click:Connect(function() switchTab("wheelie") end)
 ExtraTabBtn.MouseButton1Click:Connect(function() switchTab("extra") end)
 SpeedTabBtn.MouseButton1Click:Connect(function() switchTab("speed") end)
+TeleportTabBtn.MouseButton1Click:Connect(function() switchTab("teleport") end)
 
 -- ==================== THEME SWITCHING ====================
 local function applyTheme(themeName)
@@ -1641,6 +1984,18 @@ local function applyTheme(themeName)
     TweenService:Create(ExtraPanel, TweenInfo.new(0.4), {BackgroundColor3 = currentTheme.panel}):Play()
     TweenService:Create(ExtraTitle, TweenInfo.new(0.4), {TextColor3 = currentTheme.accent}):Play()
     TweenService:Create(SpeedPanel, TweenInfo.new(0.4), {BackgroundColor3 = currentTheme.panel}):Play()
+    TweenService:Create(TeleportPanel, TweenInfo.new(0.4), {BackgroundColor3 = currentTheme.panel, BackgroundTransparency = 0.2}):Play()
+    TweenService:Create(TeleportTitle, TweenInfo.new(0.4), {TextColor3 = currentTheme.accent}):Play()
+    TweenService:Create(TeleportSearchBox, TweenInfo.new(0.4), {BackgroundColor3 = currentTheme.card, BackgroundTransparency = 0.25, TextColor3 = currentTheme.text}):Play()
+    TweenService:Create(TeleportHeader, TweenInfo.new(0.4), {BackgroundColor3 = currentTheme.card, BackgroundTransparency = 0.2}):Play()
+    TweenService:Create(TeleportRefreshBtn, TweenInfo.new(0.4), {BackgroundColor3 = currentTheme.tabInactive, BackgroundTransparency = 0.15, TextColor3 = currentTheme.text}):Play()
+    NameHeader.TextColor3 = currentTheme.textDim
+    StatusHeader.TextColor3 = currentTheme.textDim
+    ActionHeader.TextColor3 = currentTheme.textDim
+    TeleportFooter.TextColor3 = currentTheme.textDim
+    TeleportHint.TextColor3 = currentTheme.textDim
+    TeleportScroll.ScrollBarImageColor3 = currentTheme.accent
+    updateTeleportList()
     TweenService:Create(ThemeDropdown, TweenInfo.new(0.3), {BackgroundColor3 = currentTheme.panel}):Play()
     for _, tab in ipairs(allTabs) do
         if tab.name == currentTab then
@@ -1718,6 +2073,7 @@ MinBtn.MouseButton1Click:Connect(function()
         WheelieContent.Visible = false
         ExtraContent.Visible = false
         SpeedContent.Visible = false
+        TeleportContent.Visible = false
         TabBar.Visible = false
     else
         TweenService:Create(MainFrame, TweenInfo.new(0.3), {Size = originalSize}):Play()

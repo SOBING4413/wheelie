@@ -19,6 +19,7 @@ local originalCameraType = nil
 local noclipConnection = nil
 local healConnection = nil
 local freecamRunning = false
+local sendNotification
 
 -- ==================== THEME SYSTEM ====================
 local themes = {
@@ -1167,6 +1168,7 @@ TeleportContent.Parent = MainFrame
 local TeleportPanel = Instance.new("Frame")
 TeleportPanel.Size = UDim2.new(1, 0, 1, 0)
 TeleportPanel.BackgroundColor3 = currentTheme.panel
+TeleportPanel.BackgroundTransparency = 0.2
 TeleportPanel.BorderSizePixel = 0
 TeleportPanel.Parent = TeleportContent
 Instance.new("UICorner", TeleportPanel).CornerRadius = UDim.new(0, 12)
@@ -1189,6 +1191,7 @@ local TeleportSearchBox = Instance.new("TextBox")
 TeleportSearchBox.Size = UDim2.new(1, -120, 0, 28)
 TeleportSearchBox.Position = UDim2.new(0, 10, 0, 36)
 TeleportSearchBox.BackgroundColor3 = currentTheme.card
+TeleportSearchBox.BackgroundTransparency = 0.25
 TeleportSearchBox.PlaceholderText = "Cari pemain..."
 TeleportSearchBox.PlaceholderColor3 = currentTheme.textDim
 TeleportSearchBox.Text = ""
@@ -1204,6 +1207,7 @@ local TeleportRefreshBtn = Instance.new("TextButton")
 TeleportRefreshBtn.Size = UDim2.new(0, 96, 0, 28)
 TeleportRefreshBtn.Position = UDim2.new(1, -106, 0, 36)
 TeleportRefreshBtn.BackgroundColor3 = currentTheme.tabInactive
+TeleportRefreshBtn.BackgroundTransparency = 0.15
 TeleportRefreshBtn.Text = "Refresh"
 TeleportRefreshBtn.TextColor3 = currentTheme.text
 TeleportRefreshBtn.TextSize = 11
@@ -1216,6 +1220,7 @@ local TeleportHeader = Instance.new("Frame")
 TeleportHeader.Size = UDim2.new(1, -20, 0, 24)
 TeleportHeader.Position = UDim2.new(0, 10, 0, 72)
 TeleportHeader.BackgroundColor3 = currentTheme.card
+TeleportHeader.BackgroundTransparency = 0.2
 TeleportHeader.BorderSizePixel = 0
 TeleportHeader.Parent = TeleportPanel
 Instance.new("UICorner", TeleportHeader).CornerRadius = UDim.new(0, 8)
@@ -1279,6 +1284,17 @@ TeleportFooter.Font = Enum.Font.Gotham
 TeleportFooter.TextXAlignment = Enum.TextXAlignment.Left
 TeleportFooter.Parent = TeleportPanel
 
+local TeleportHint = Instance.new("TextLabel")
+TeleportHint.Size = UDim2.new(1, -20, 0, 16)
+TeleportHint.Position = UDim2.new(0, 10, 0, 24)
+TeleportHint.BackgroundTransparency = 1
+TeleportHint.Text = "Hanya pemain online ditampilkan • Klik Refresh untuk sinkronisasi ulang"
+TeleportHint.TextColor3 = currentTheme.textDim
+TeleportHint.TextSize = 10
+TeleportHint.Font = Enum.Font.Gotham
+TeleportHint.TextXAlignment = Enum.TextXAlignment.Left
+TeleportHint.Parent = TeleportPanel
+
 local teleportRows = {}
 local teleportFavorites = {}
 local teleportLastTarget = nil
@@ -1311,9 +1327,15 @@ local function teleportToPlayer(targetPlayer)
     sendNotification("Teleport Berhasil", "Kamu teleport ke " .. targetPlayer.Name, "success", 3)
 end
 
-local function updateTeleportList()
+local function updateTeleportList(forceRebuild)
     local query = string.lower(string.gsub(TeleportSearchBox.Text or "", "^%s*(.-)%s*$", "%1"))
-    local players = Players:GetPlayers()
+    local players = {}
+    for _, plr in ipairs(Players:GetPlayers()) do
+        local isOnlineReady = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
+        if isOnlineReady then
+            table.insert(players, plr)
+        end
+    end
     table.sort(players, function(a, b)
         return string.lower(a.Name) < string.lower(b.Name)
     end)
@@ -1327,8 +1349,15 @@ local function updateTeleportList()
         end
     end
 
-    for _, row in pairs(teleportRows) do
-        row.Visible = false
+    if forceRebuild then
+        for userId, row in pairs(teleportRows) do
+            row:Destroy()
+            teleportRows[userId] = nil
+        end
+    else
+        for _, row in pairs(teleportRows) do
+            row.Visible = false
+        end
     end
 
     for _, plr in ipairs(players) do
@@ -1338,6 +1367,7 @@ local function updateTeleportList()
             row = Instance.new("Frame")
             row.Size = UDim2.new(1, 0, 0, 34)
             row.BackgroundColor3 = currentTheme.card
+            row.BackgroundTransparency = 0.25
             row.BorderSizePixel = 0
             row.Parent = TeleportScroll
             Instance.new("UICorner", row).CornerRadius = UDim.new(0, 8)
@@ -1410,13 +1440,12 @@ local function updateTeleportList()
         local rowMatches = query == "" or string.find(string.lower(plr.Name), query, 1, true) ~= nil
         if rowMatches then
             visibleCount = visibleCount + 1
-            row.LayoutOrder = teleportFavorites[plr.UserId] and -1000 + visibleCount or visibleCount
+            row.LayoutOrder = visibleCount
             row.Visible = true
             row.PlayerLabel.Text = plr.DisplayName ~= plr.Name and (plr.DisplayName .. " (@" .. plr.Name .. ")") or plr.Name
 
-            local isReady = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
-            row.StatusLabel.Text = isReady and "Online" or "Offline"
-            row.StatusLabel.TextColor3 = isReady and currentTheme.success or currentTheme.warning
+            row.StatusLabel.Text = "Online"
+            row.StatusLabel.TextColor3 = currentTheme.success
 
             row.FavBtn.Text = teleportFavorites[plr.UserId] and "★" or "☆"
             row.FavBtn.TextColor3 = teleportFavorites[plr.UserId] and currentTheme.warning or currentTheme.textDim
@@ -1430,11 +1459,14 @@ local function updateTeleportList()
         end
     end
 
-    TeleportFooter.Text = string.format("%d pemain | Favorite: %s", visibleCount, favoriteName)
+    TeleportFooter.Text = string.format("%d pemain online | Favorite: %s", visibleCount, favoriteName)
 end
 
 TeleportSearchBox:GetPropertyChangedSignal("Text"):Connect(updateTeleportList)
-TeleportRefreshBtn.MouseButton1Click:Connect(updateTeleportList)
+TeleportRefreshBtn.MouseButton1Click:Connect(function()
+    updateTeleportList(true)
+    sendNotification("Player List", "Daftar pemain berhasil di-refresh.", "success", 2)
+end)
 Players.PlayerAdded:Connect(updateTeleportList)
 Players.PlayerRemoving:Connect(function(removingPlayer)
     local row = teleportRows[removingPlayer.UserId]
@@ -1460,7 +1492,7 @@ NotifContainer.BackgroundTransparency = 1
 NotifContainer.Parent = ScreenGui
 Instance.new("UIListLayout", NotifContainer).Padding = UDim.new(0, 6)
 
-local function sendNotification(title, text, notifType, duration)
+sendNotification = function(title, text, notifType, duration)
     if not notifikasiEnabled then return end
     duration = duration or 4
     local nf = Instance.new("Frame")
@@ -1952,15 +1984,16 @@ local function applyTheme(themeName)
     TweenService:Create(ExtraPanel, TweenInfo.new(0.4), {BackgroundColor3 = currentTheme.panel}):Play()
     TweenService:Create(ExtraTitle, TweenInfo.new(0.4), {TextColor3 = currentTheme.accent}):Play()
     TweenService:Create(SpeedPanel, TweenInfo.new(0.4), {BackgroundColor3 = currentTheme.panel}):Play()
-    TweenService:Create(TeleportPanel, TweenInfo.new(0.4), {BackgroundColor3 = currentTheme.panel}):Play()
+    TweenService:Create(TeleportPanel, TweenInfo.new(0.4), {BackgroundColor3 = currentTheme.panel, BackgroundTransparency = 0.2}):Play()
     TweenService:Create(TeleportTitle, TweenInfo.new(0.4), {TextColor3 = currentTheme.accent}):Play()
-    TweenService:Create(TeleportSearchBox, TweenInfo.new(0.4), {BackgroundColor3 = currentTheme.card, TextColor3 = currentTheme.text}):Play()
-    TweenService:Create(TeleportHeader, TweenInfo.new(0.4), {BackgroundColor3 = currentTheme.card}):Play()
-    TweenService:Create(TeleportRefreshBtn, TweenInfo.new(0.4), {BackgroundColor3 = currentTheme.tabInactive, TextColor3 = currentTheme.text}):Play()
+    TweenService:Create(TeleportSearchBox, TweenInfo.new(0.4), {BackgroundColor3 = currentTheme.card, BackgroundTransparency = 0.25, TextColor3 = currentTheme.text}):Play()
+    TweenService:Create(TeleportHeader, TweenInfo.new(0.4), {BackgroundColor3 = currentTheme.card, BackgroundTransparency = 0.2}):Play()
+    TweenService:Create(TeleportRefreshBtn, TweenInfo.new(0.4), {BackgroundColor3 = currentTheme.tabInactive, BackgroundTransparency = 0.15, TextColor3 = currentTheme.text}):Play()
     NameHeader.TextColor3 = currentTheme.textDim
     StatusHeader.TextColor3 = currentTheme.textDim
     ActionHeader.TextColor3 = currentTheme.textDim
     TeleportFooter.TextColor3 = currentTheme.textDim
+    TeleportHint.TextColor3 = currentTheme.textDim
     TeleportScroll.ScrollBarImageColor3 = currentTheme.accent
     updateTeleportList()
     TweenService:Create(ThemeDropdown, TweenInfo.new(0.3), {BackgroundColor3 = currentTheme.panel}):Play()

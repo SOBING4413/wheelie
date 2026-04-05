@@ -1763,27 +1763,110 @@ local speedLoopActive = false
 local cachedVehicle = nil
 local cachedDescendants = nil
 local lastDescScan = 0
+local touchedVehicles = {}
 
-local function findPlayerVehicle()
+local function isVehicleModel(model)
+    if not model or not model:IsA("Model") then return false end
+    local hasVehicleComponent = false
+    for _, desc in ipairs(model:GetDescendants()) do
+        if desc:IsA("VehicleSeat")
+            or desc:IsA("Seat")
+            or desc:IsA("HingeConstraint")
+            or desc:IsA("CylindricalConstraint")
+            or desc:IsA("LinearVelocity")
+            or desc:IsA("VectorForce")
+        then
+            hasVehicleComponent = true
+            break
+        end
+    end
+    return hasVehicleComponent
+end
+
+local function findPlayerVehicles()
+    local vehicles = {}
+    local function addVehicle(model)
+        if model and model:IsA("Model") and not vehicles[model] and isVehicleModel(model) then
+            vehicles[model] = true
+            touchedVehicles[model] = true
+        end
+    end
+
     local character = player.Character
-    if not character then return nil end
+    if not character then return vehicles end
     local interface = player.PlayerGui:FindFirstChild("Interface")
     if interface then
         local bv = interface:FindFirstChild("Bike")
-        if bv and bv.Value then return bv.Value end
+        if bv and bv.Value then addVehicle(bv.Value) end
     end
+
     local humanoid = character:FindFirstChildOfClass("Humanoid")
     if humanoid and humanoid.SeatPart then
         local seat = humanoid.SeatPart
         if seat:IsA("VehicleSeat") then
             if not seat:GetAttribute("_cf") then seat:SetAttribute("_cf", seat.MaxSpeed) end
             seat.MaxSpeed = seat:GetAttribute("_cf") * currentSpeedMultiplier
-            local v = seat.Parent
-            while v and not v:IsA("Model") do v = v.Parent end
-            return v
+        end
+        local v = seat.Parent
+        while v and not v:IsA("Model") do v = v.Parent end
+        addVehicle(v)
+    end
+
+    local root = character:FindFirstChild("HumanoidRootPart")
+    if root then
+        for _, part in ipairs(workspace:GetPartBoundsInRadius(root.Position, 40)) do
+            local model = part:FindFirstAncestorOfClass("Model")
+            if model and model ~= character and model ~= workspace and model.PrimaryPart then
+                addVehicle(model)
+            end
         end
     end
-    return nil
+
+    return vehicles
+end
+
+local function applySpeedToVehicle(vehicle)
+    if not vehicle or not vehicle.Parent then return end
+    local descendants = vehicle:GetDescendants()
+    for _, desc in pairs(descendants) do
+        if desc:IsA("IntValue") or desc:IsA("NumberValue") then
+            local nl = desc.Name:lower()
+            if nl:find("speed") or nl:find("maxspeed") or nl:find("topspeed") or nl:find("velocity") or nl:find("power") or nl:find("torque") or nl:find("rpm") then
+                pcall(function()
+                    if not desc:GetAttribute("_cf") then desc:SetAttribute("_cf", desc.Value) end
+                    desc.Value = desc:GetAttribute("_cf") * currentSpeedMultiplier
+                end)
+            end
+        end
+        if desc:IsA("VehicleSeat") then
+            pcall(function()
+                if not desc:GetAttribute("_ms") then desc:SetAttribute("_ms", desc.MaxSpeed); desc:SetAttribute("_tq", desc.Torque) end
+                desc.MaxSpeed = desc:GetAttribute("_ms") * currentSpeedMultiplier
+                desc.Torque = desc:GetAttribute("_tq") * currentSpeedMultiplier
+            end)
+        end
+        if desc:IsA("HingeConstraint") and desc.ActuatorType == Enum.ActuatorType.Motor then
+            pcall(function()
+                if not desc:GetAttribute("_av") then desc:SetAttribute("_av", desc.AngularVelocity); desc:SetAttribute("_mt", desc.MotorMaxTorque) end
+                desc.AngularVelocity = desc:GetAttribute("_av") * currentSpeedMultiplier
+                desc.MotorMaxTorque = desc:GetAttribute("_mt") * currentSpeedMultiplier
+            end)
+        end
+        if desc:IsA("CylindricalConstraint") then
+            pcall(function()
+                if not desc:GetAttribute("_av") then desc:SetAttribute("_av", desc.AngularVelocity); desc:SetAttribute("_mt", desc.MotorMaxTorque) end
+                desc.AngularVelocity = desc:GetAttribute("_av") * currentSpeedMultiplier
+                desc.MotorMaxTorque = desc:GetAttribute("_mt") * currentSpeedMultiplier
+            end)
+        end
+        if desc:IsA("LinearVelocity") then
+            pcall(function()
+                if not desc:GetAttribute("_lv") then desc:SetAttribute("_lv", desc.VectorVelocity.Magnitude) end
+                local dir = desc.VectorVelocity.Magnitude > 0 and desc.VectorVelocity.Unit or Vector3.new(0, 0, -1)
+                desc.VectorVelocity = dir * (desc:GetAttribute("_lv") * currentSpeedMultiplier)
+            end)
+        end
+    end
 end
 
 local function applyVehicleSpeed(multiplier)
@@ -1802,44 +1885,19 @@ local function applyVehicleSpeed(multiplier)
                     if not hrp then return end
                     fc = fc + 1
                     if fc % 4 == 1 or not cachedVehicle then
-                        cachedVehicle = findPlayerVehicle()
+                        local vehicles = findPlayerVehicles()
+                        for model, _ in pairs(vehicles) do
+                            cachedVehicle = model
+                            break
+                        end
                         if cachedVehicle then cachedDescendants = cachedVehicle:GetDescendants() end
                     end
-                    if not cachedVehicle then return end
+                    local vehicles = findPlayerVehicles()
+                    if not next(vehicles) and not cachedVehicle then return end
                     local now = tick()
-                    if now - lastDescScan > 2 then cachedDescendants = cachedVehicle:GetDescendants(); lastDescScan = now end
-                    if not cachedDescendants then return end
-                    for _, desc in pairs(cachedDescendants) do
-                        if desc:IsA("IntValue") or desc:IsA("NumberValue") then
-                            local nl = desc.Name:lower()
-                            if nl:find("speed") or nl:find("maxspeed") or nl:find("topspeed") or nl:find("velocity") or nl:find("power") or nl:find("torque") then
-                                pcall(function()
-                                    if not desc:GetAttribute("_cf") then desc:SetAttribute("_cf", desc.Value) end
-                                    desc.Value = desc:GetAttribute("_cf") * currentSpeedMultiplier
-                                end)
-                            end
-                        end
-                        if desc:IsA("VehicleSeat") then
-                            pcall(function()
-                                if not desc:GetAttribute("_ms") then desc:SetAttribute("_ms", desc.MaxSpeed); desc:SetAttribute("_tq", desc.Torque) end
-                                desc.MaxSpeed = desc:GetAttribute("_ms") * currentSpeedMultiplier
-                                desc.Torque = desc:GetAttribute("_tq") * currentSpeedMultiplier
-                            end)
-                        end
-                        if desc:IsA("HingeConstraint") and desc.ActuatorType == Enum.ActuatorType.Motor then
-                            pcall(function()
-                                if not desc:GetAttribute("_av") then desc:SetAttribute("_av", desc.AngularVelocity); desc:SetAttribute("_mt", desc.MotorMaxTorque) end
-                                desc.AngularVelocity = desc:GetAttribute("_av") * currentSpeedMultiplier
-                                desc.MotorMaxTorque = desc:GetAttribute("_mt") * currentSpeedMultiplier
-                            end)
-                        end
-                        if desc:IsA("CylindricalConstraint") then
-                            pcall(function()
-                                if not desc:GetAttribute("_av") then desc:SetAttribute("_av", desc.AngularVelocity); desc:SetAttribute("_mt", desc.MotorMaxTorque) end
-                                desc.AngularVelocity = desc:GetAttribute("_av") * currentSpeedMultiplier
-                                desc.MotorMaxTorque = desc:GetAttribute("_mt") * currentSpeedMultiplier
-                            end)
-                        end
+                    if now - lastDescScan > 2 and cachedVehicle then cachedDescendants = cachedVehicle:GetDescendants(); lastDescScan = now end
+                    for vehicle, _ in pairs(vehicles) do
+                        applySpeedToVehicle(vehicle)
                     end
                     if currentSpeedMultiplier > 1 and hrp then
                         local vel = hrp.AssemblyLinearVelocity
@@ -1887,11 +1945,9 @@ local function resetAllSpeeds()
         if h then pcall(function() h.WalkSpeed = 16; h.UseJumpPower = true; h.JumpPower = 50 end) end
     end
     pcall(function()
-        local interface = player.PlayerGui:FindFirstChild("Interface")
-        if interface then
-            local bv = interface:FindFirstChild("Bike")
-            if bv and bv.Value then
-                for _, desc in pairs(bv.Value:GetDescendants()) do
+        for vehicle, _ in pairs(touchedVehicles) do
+            if vehicle and vehicle.Parent then
+                for _, desc in pairs(vehicle:GetDescendants()) do
                     if (desc:IsA("IntValue") or desc:IsA("NumberValue")) then
                         local o = desc:GetAttribute("_cf"); if o then pcall(function() desc.Value = o end) end
                     end
@@ -1902,6 +1958,15 @@ local function resetAllSpeeds()
                     if desc:IsA("HingeConstraint") or desc:IsA("CylindricalConstraint") then
                         local o = desc:GetAttribute("_av"); if o then pcall(function() desc.AngularVelocity = o end) end
                         local m = desc:GetAttribute("_mt"); if m then pcall(function() desc.MotorMaxTorque = m end) end
+                    end
+                    if desc:IsA("LinearVelocity") then
+                        local lv = desc:GetAttribute("_lv")
+                        if lv then
+                            pcall(function()
+                                local unit = desc.VectorVelocity.Magnitude > 0 and desc.VectorVelocity.Unit or Vector3.new(0, 0, -1)
+                                desc.VectorVelocity = unit * lv
+                            end)
+                        end
                     end
                 end
             end

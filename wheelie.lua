@@ -1424,6 +1424,7 @@ local trackedVehicles = {}
 local cachedDescendants = nil
 local lastDescScan = 0
 local lastAppliedMultiplier = nil
+local lastWorkspaceSeatScan = 0
 
 local function getModelAncestor(instance)
     local current = instance
@@ -1443,6 +1444,9 @@ local function findPlayerVehicles()
     local foundVehicles = {}
     local seen = {}
     local function addVehicle(vehicle)
+        if vehicle and not vehicle:IsA("Model") then
+            vehicle = getModelAncestor(vehicle)
+        end
         if vehicle and vehicle:IsA("Model") and not seen[vehicle] then
             seen[vehicle] = true
             table.insert(foundVehicles, vehicle)
@@ -1469,7 +1473,54 @@ local function findPlayerVehicles()
         end
     end
 
-    return foundVehicles
+    -- Fallback: beberapa game tidak expose bike lewat Interface, jadi scan seat yang diduduki player sesekali.
+    if humanoid and #foundVehicles == 0 then
+        local now = tick()
+        if now - lastWorkspaceSeatScan > 2 then
+            for _, desc in pairs(workspace:GetDescendants()) do
+                if desc:IsA("VehicleSeat") and desc.Occupant == humanoid then
+                    addVehicle(desc)
+                end
+            end
+            lastWorkspaceSeatScan = now
+        end
+        return
+    end
+
+    if desc:IsA("VehicleSeat") then
+        pcall(function()
+            if not desc:GetAttribute("_ms") then
+                desc:SetAttribute("_ms", desc.MaxSpeed)
+                desc:SetAttribute("_tq", desc.Torque)
+            end
+            desc.MaxSpeed = desc:GetAttribute("_ms") * multiplier
+            desc.Torque = desc:GetAttribute("_tq") * multiplier
+        end)
+        return
+    end
+
+    if desc:IsA("HingeConstraint") and desc.ActuatorType == Enum.ActuatorType.Motor then
+        pcall(function()
+            if not desc:GetAttribute("_av") then
+                desc:SetAttribute("_av", desc.AngularVelocity)
+                desc:SetAttribute("_mt", desc.MotorMaxTorque)
+            end
+            desc.AngularVelocity = desc:GetAttribute("_av") * multiplier
+            desc.MotorMaxTorque = desc:GetAttribute("_mt") * multiplier
+        end)
+        return
+    end
+
+    if desc:IsA("CylindricalConstraint") then
+        pcall(function()
+            if not desc:GetAttribute("_av") then
+                desc:SetAttribute("_av", desc.AngularVelocity)
+                desc:SetAttribute("_mt", desc.MotorMaxTorque)
+            end
+            desc.AngularVelocity = desc:GetAttribute("_av") * multiplier
+            desc.MotorMaxTorque = desc:GetAttribute("_mt") * multiplier
+        end)
+    end
 end
 
 local function applyMultiplierToDesc(desc, multiplier)
@@ -1541,6 +1592,13 @@ local function applyVehicleSpeed(multiplier)
                     if shouldRescan then
                         cachedVehicles = findPlayerVehicles()
                         cachedDescendants = {}
+                        for _, vehicle in pairs(cachedVehicles) do
+                            if vehicle and vehicle.Parent then
+                                for _, desc in pairs(vehicle:GetDescendants()) do
+                                    table.insert(cachedDescendants, desc)
+                                end
+                            end
+                        end
                         for vehicle, _ in pairs(trackedVehicles) do
                             if vehicle and vehicle.Parent then
                                 for _, desc in pairs(vehicle:GetDescendants()) do

@@ -1484,9 +1484,43 @@ local function findPlayerVehicles()
             end
             lastWorkspaceSeatScan = now
         end
+        return
     end
 
-    return foundVehicles
+    if desc:IsA("VehicleSeat") then
+        pcall(function()
+            if not desc:GetAttribute("_ms") then
+                desc:SetAttribute("_ms", desc.MaxSpeed)
+                desc:SetAttribute("_tq", desc.Torque)
+            end
+            desc.MaxSpeed = desc:GetAttribute("_ms") * multiplier
+            desc.Torque = desc:GetAttribute("_tq") * multiplier
+        end)
+        return
+    end
+
+    if desc:IsA("HingeConstraint") and desc.ActuatorType == Enum.ActuatorType.Motor then
+        pcall(function()
+            if not desc:GetAttribute("_av") then
+                desc:SetAttribute("_av", desc.AngularVelocity)
+                desc:SetAttribute("_mt", desc.MotorMaxTorque)
+            end
+            desc.AngularVelocity = desc:GetAttribute("_av") * multiplier
+            desc.MotorMaxTorque = desc:GetAttribute("_mt") * multiplier
+        end)
+        return
+    end
+
+    if desc:IsA("CylindricalConstraint") then
+        pcall(function()
+            if not desc:GetAttribute("_av") then
+                desc:SetAttribute("_av", desc.AngularVelocity)
+                desc:SetAttribute("_mt", desc.MotorMaxTorque)
+            end
+            desc.AngularVelocity = desc:GetAttribute("_av") * multiplier
+            desc.MotorMaxTorque = desc:GetAttribute("_mt") * multiplier
+        end)
+    end
 end
 
 local function applyMultiplierToDesc(desc, multiplier)

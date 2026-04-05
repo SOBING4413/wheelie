@@ -1423,6 +1423,8 @@ local cachedVehicles = {}
 local trackedVehicles = {}
 local cachedDescendants = nil
 local lastDescScan = 0
+local lastAppliedMultiplier = nil
+local lastWorkspaceSeatScan = 0
 
 local function getModelAncestor(instance)
     local current = instance
@@ -1442,6 +1444,9 @@ local function findPlayerVehicles()
     local foundVehicles = {}
     local seen = {}
     local function addVehicle(vehicle)
+        if vehicle and not vehicle:IsA("Model") then
+            vehicle = getModelAncestor(vehicle)
+        end
         if vehicle and vehicle:IsA("Model") and not seen[vehicle] then
             seen[vehicle] = true
             table.insert(foundVehicles, vehicle)
@@ -1468,15 +1473,70 @@ local function findPlayerVehicles()
         end
     end
 
-    if humanoid then
-        for _, desc in pairs(workspace:GetDescendants()) do
-            if desc:IsA("VehicleSeat") and desc.Occupant == humanoid then
-                addVehicle(getModelAncestor(desc))
+    -- Fallback: beberapa game tidak expose bike lewat Interface, jadi scan seat yang diduduki player sesekali.
+    if humanoid and #foundVehicles == 0 then
+        local now = tick()
+        if now - lastWorkspaceSeatScan > 2 then
+            for _, desc in pairs(workspace:GetDescendants()) do
+                if desc:IsA("VehicleSeat") and desc.Occupant == humanoid then
+                    addVehicle(desc)
+                end
             end
+            lastWorkspaceSeatScan = now
         end
     end
 
     return foundVehicles
+end
+
+local function applyMultiplierToDesc(desc, multiplier)
+    if desc:IsA("IntValue") or desc:IsA("NumberValue") then
+        local nl = desc.Name:lower()
+        if nl:find("speed") or nl:find("maxspeed") or nl:find("topspeed") or nl:find("velocity") or nl:find("power") or nl:find("torque") then
+            pcall(function()
+                if not desc:GetAttribute("_cf") then
+                    desc:SetAttribute("_cf", desc.Value)
+                end
+                desc.Value = desc:GetAttribute("_cf") * multiplier
+            end)
+        end
+        return
+    end
+
+    if desc:IsA("VehicleSeat") then
+        pcall(function()
+            if not desc:GetAttribute("_ms") then
+                desc:SetAttribute("_ms", desc.MaxSpeed)
+                desc:SetAttribute("_tq", desc.Torque)
+            end
+            desc.MaxSpeed = desc:GetAttribute("_ms") * multiplier
+            desc.Torque = desc:GetAttribute("_tq") * multiplier
+        end)
+        return
+    end
+
+    if desc:IsA("HingeConstraint") and desc.ActuatorType == Enum.ActuatorType.Motor then
+        pcall(function()
+            if not desc:GetAttribute("_av") then
+                desc:SetAttribute("_av", desc.AngularVelocity)
+                desc:SetAttribute("_mt", desc.MotorMaxTorque)
+            end
+            desc.AngularVelocity = desc:GetAttribute("_av") * multiplier
+            desc.MotorMaxTorque = desc:GetAttribute("_mt") * multiplier
+        end)
+        return
+    end
+
+    if desc:IsA("CylindricalConstraint") then
+        pcall(function()
+            if not desc:GetAttribute("_av") then
+                desc:SetAttribute("_av", desc.AngularVelocity)
+                desc:SetAttribute("_mt", desc.MotorMaxTorque)
+            end
+            desc.AngularVelocity = desc:GetAttribute("_av") * multiplier
+            desc.MotorMaxTorque = desc:GetAttribute("_mt") * multiplier
+        end)
+    end
 end
 
 local function applyVehicleSpeed(multiplier)
@@ -1486,20 +1546,25 @@ local function applyVehicleSpeed(multiplier)
     if not speedLoopActive then
         speedLoopActive = true
         task.spawn(function()
-            local fc = 0
             while speedLoopActive and scriptActive do
                 pcall(function()
                     local character = player.Character
                     if not character then return end
-                    local hrp = character:FindFirstChild("HumanoidRootPart")
-                    if not hrp then return end
-                    fc = fc + 1
-                    if fc % 4 == 1 or #cachedVehicles == 0 then
+                    if #cachedVehicles == 0 then
                         cachedVehicles = findPlayerVehicles()
                     end
                     local now = tick()
-                    if now - lastDescScan > 2 then
+                    local shouldRescan = now - lastDescScan > 1.25
+                    if shouldRescan then
+                        cachedVehicles = findPlayerVehicles()
                         cachedDescendants = {}
+                        for _, vehicle in pairs(cachedVehicles) do
+                            if vehicle and vehicle.Parent then
+                                for _, desc in pairs(vehicle:GetDescendants()) do
+                                    table.insert(cachedDescendants, desc)
+                                end
+                            end
+                        end
                         for vehicle, _ in pairs(trackedVehicles) do
                             if vehicle and vehicle.Parent then
                                 for _, desc in pairs(vehicle:GetDescendants()) do
@@ -1512,49 +1577,14 @@ local function applyVehicleSpeed(multiplier)
                         lastDescScan = now
                     end
                     if not cachedDescendants then return end
-                    for _, desc in pairs(cachedDescendants) do
-                        if desc:IsA("IntValue") or desc:IsA("NumberValue") then
-                            local nl = desc.Name:lower()
-                            if nl:find("speed") or nl:find("maxspeed") or nl:find("topspeed") or nl:find("velocity") or nl:find("power") or nl:find("torque") then
-                                pcall(function()
-                                    if not desc:GetAttribute("_cf") then desc:SetAttribute("_cf", desc.Value) end
-                                    desc.Value = desc:GetAttribute("_cf") * currentSpeedMultiplier
-                                end)
-                            end
+                    if lastAppliedMultiplier ~= currentSpeedMultiplier or shouldRescan then
+                        for _, desc in pairs(cachedDescendants) do
+                            applyMultiplierToDesc(desc, currentSpeedMultiplier)
                         end
-                        if desc:IsA("VehicleSeat") then
-                            pcall(function()
-                                if not desc:GetAttribute("_ms") then desc:SetAttribute("_ms", desc.MaxSpeed); desc:SetAttribute("_tq", desc.Torque) end
-                                desc.MaxSpeed = desc:GetAttribute("_ms") * currentSpeedMultiplier
-                                desc.Torque = desc:GetAttribute("_tq") * currentSpeedMultiplier
-                            end)
-                        end
-                        if desc:IsA("HingeConstraint") and desc.ActuatorType == Enum.ActuatorType.Motor then
-                            pcall(function()
-                                if not desc:GetAttribute("_av") then desc:SetAttribute("_av", desc.AngularVelocity); desc:SetAttribute("_mt", desc.MotorMaxTorque) end
-                                desc.AngularVelocity = desc:GetAttribute("_av") * currentSpeedMultiplier
-                                desc.MotorMaxTorque = desc:GetAttribute("_mt") * currentSpeedMultiplier
-                            end)
-                        end
-                        if desc:IsA("CylindricalConstraint") then
-                            pcall(function()
-                                if not desc:GetAttribute("_av") then desc:SetAttribute("_av", desc.AngularVelocity); desc:SetAttribute("_mt", desc.MotorMaxTorque) end
-                                desc.AngularVelocity = desc:GetAttribute("_av") * currentSpeedMultiplier
-                                desc.MotorMaxTorque = desc:GetAttribute("_mt") * currentSpeedMultiplier
-                            end)
-                        end
-                    end
-                    if currentSpeedMultiplier > 1 and hrp then
-                        local vel = hrp.AssemblyLinearVelocity
-                        local spd = vel.Magnitude
-                        if spd > 10 and spd < 300 then
-                            local dir = vel.Unit
-                            local bf = (currentSpeedMultiplier - 1) * 0.15
-                            hrp.AssemblyLinearVelocity = vel + (dir * spd * bf)
-                        end
+                        lastAppliedMultiplier = currentSpeedMultiplier
                     end
                 end)
-                task.wait(0.25)
+                task.wait(0.1)
             end
         end)
     end
@@ -1584,6 +1614,7 @@ local function resetAllSpeeds()
     cachedVehicles = {}
     trackedVehicles = {}
     cachedDescendants = nil
+    lastAppliedMultiplier = nil
     SpeedCurrentValue.Text = "Kecepatan: Default (1x)"
     local c = player.Character
     if c then
